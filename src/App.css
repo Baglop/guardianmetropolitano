@@ -1,0 +1,175 @@
+.App {
+  text-align: center;
+}
+body{
+  height: 100vh;
+  width: 100vw;
+}
+
+.App-logo {
+  animation: App-logo-spin infinite 20s linear;
+  height: 40vmin;
+  pointer-events: none;
+}
+
+.App-header {
+  background-color: #303136;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.nav-pills>a:hover {
+  background-color: #545454;
+  color: #d6d6d6;
+  border-radius: 0%
+}
+
+.nav-pills>a.nav-link.active {
+  background-color: #545454;
+  color: white;
+  border-radius: 0%
+}
+
+.nav-pills>a {
+  color: #b1b1b1;
+}
+
+.nav-pills {
+  background-color: #303136;
+  color: white;
+  font-size: 100%;
+}
+
+.bottomRow{
+  height: calc(100% - 25px);
+}
+
+.sidebar{
+  background-color:#303136;
+  min-width:200px;
+  height: 100%;
+}
+
+hr.titleLine{
+  border:1px solid rgba(187, 187, 187, 0.1) ;
+  width: 95%;
+  border-top-right-radius: 1px;
+  border-bottom-right-radius: 1px;
+}
+
+.logoSide{
+  width: 93%;
+  margin: 0 auto;
+}
+.map{
+  height: 70vh;
+}
+
+.list{
+  background-color: #363940;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+}
+
+.listChild{
+  background-color: #3b3f46;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+}
+.nav-reportList>a:hover {
+  background-color: #545454;
+  color: #d6d6d6;
+  border-radius: 0%
+}
+
+.nav-reportList{
+  margin-right: 13px;
+}
+
+.nav-reportList>a.nav-link.active {
+  background-color: #545454;
+  color: white;
+  border-radius: 0%
+}
+
+
+.reportFont{
+  color: white !important;
+}
+
+.reportFont light{
+  color:#b1b1b1 ;
+  font-size: 12px;
+}
+.reportDesc light{
+  color:#b1b1b1 ;
+  font-size: 16px;
+}
+.reportDesc{
+  height: 53%;
+  padding: 10px;
+  padding-right: 20px;
+  background-color: rgba(255,255,255,0.1);
+  margin-bottom:10px;
+  border: 0px solid rgba(187, 187, 187, 0.1) ;
+  border-radius: 10px;
+  border-right-width: 0px;
+  border-bottom-right-radius: 0px;
+  border-top-right-radius: 0px;
+}
+
+.listChild>.simplebar-track.simplebar-vertical{
+  top: 3px;
+  right: 2px;
+  bottom: 3px;
+  width: 10px;
+  background-color: #484a50;
+}
+.stats{
+  background-color: #363940;
+  border-bottom-style: solid;
+  border-color: rgba(0, 0, 0, 0.3);
+  border-bottom-width: 1px;
+  
+}
+
+.simplebar-scrollbar:before {
+  background-color: #0c0c0c;
+
+}
+
+.simplebar-scrollbar {
+  right: -10px;
+  width: 25px;
+}
+
+.simplebar-track.simplebar-vertical {
+  top: 3px;
+  right: 2px;
+  bottom: 3px;
+  width: 10px;
+  background-color: #313236;
+  
+  visibility: visible !important;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
