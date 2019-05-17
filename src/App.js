@@ -1,19 +1,38 @@
 
 import React, { Component } from 'react';
 import logo from './logo.svg';
+import { IoMdEye, IoMdEyeOff, IoMdAlert } from "react-icons/io";
 import logoImage from  './img/Ojo_Metropolitano_Logo.PNG';
 import markerIcon from './img/baseline_directions_car_black_18dp.png';
 import { Container, Row, Col, Button, Nav } from 'react-bootstrap';
 import {Map, InfoWindow, Polyline, GoogleApiWrapper, Marker} from 'google-maps-react';
 import SimpleBar from 'simplebar-react';
-
+import io from 'socket.io-client/dist/socket.io.js';
 import 'simplebar/dist/simplebar.min.css';
 import './App.css';
 import './TitlebarStyle.css';
 import { relative } from 'path';
+import Mapview from './mapView.js'
 
-const remote  = window.require('electron').remote;
+const url = 'http://siliconbear.dynu.net:3030';
+const remote = window.require('electron').remote;
 
+
+const notifier = window.require('node-notifier');
+const socket = io.connect(url);
+
+const patrullas=[{id:1,patrulla:"JAL16",lat:20.657506, lng:-103.269846,color:"#ff0000",libre:true},
+                 {id:2,patrulla:"JAL20",lat:20.675314, lng:-103.341300,color:"#ff00bf",libre:true},
+                 {id:3,patrulla:"JAL13",lat:20.674370, lng:-103.424668,color:"#b200ff",libre:true},
+                 {id:4,patrulla:"JAL55",lat:20.705093, lng:-103.326156,color:"#3b00ff",libre:true},
+                 {id:5,patrulla:"JAL40",lat:20.649956, lng:-103.323560,color:"#0077ff",libre:true},
+                 {id:6,patrulla:"JAL30",lat:20.657506, lng:-103.269846,color:"#00e5ff",libre:true},
+                 {id:7,patrulla:"JAL04",lat:20.646251, lng:-103.395829,color:"#00ff83",libre:true},
+                 {id:8,patrulla:"JAL05",lat:20.708294, lng:-103.410163,color:"#2aff00",libre:true},
+                 {id:9,patrulla:"JAL78",lat:20.626250, lng:-103.241935,color:"#bbff00",libre:true},
+                 {id:10,patrulla:"JAL36",lat:20.616932, lng:-103.314162,color:"#ffa500",libre:true},]
+
+const tipDelito=["Robo","Asalto","Acoso","Vandalismo","Pandillerismo","Violación","Secuestro o tentativa","Asesinato"]
 class App extends Component {
 
   constructor(props){
@@ -21,11 +40,81 @@ class App extends Component {
     this.state = {
       visible: false,
       viewSelected: 1,
-      lineCoordinates:null,
       carCoords:null,
       actualPos:0,
+      reports:[],
+      currentPCar:0,
+      currentReport:0,
+      currentDetailReport:0,
+      mapView:null,
+      showInfo:true,
+      markerArray:[],
+      emergencyArray:[],
+      centerFocus:{
+        lat: 20.663609,
+        lng: -103.348982
+      },
     }
   }
+  componentWillMount(){
+    this.startSocket();
+    this.setState({mapView:this._renderMap()})
+  }
+  
+  startSocket(){
+    socket.emit('vigilarSalaAgentePoliciaco');
+    
+    socket.on('botonDePanicoPresionado',(data) => this.botonDePanicoPresionado(data));
+    socket.on('reporteNuevo', (reporte) => {
+      console.log("**************************************** reporteNuevo ****************************************");
+      console.log(reporte);
+      this.setState(prev => ({reports:[...prev.reports,reporte]}))
+
+    });
+    
+  }
+
+  updateMarkerPos(data){
+    let index = this.state.emergencyArray.map((item) =>{ return item.nombreUsuario}).indexOf(data.nombreUsuario)
+    console.log(index)
+    if(index == -1){
+      const map = this.mapComponent
+      let marker = new this.props.google.maps.Marker({
+        position: {lat:Number(data.coordenadaX),lng:Number(data.coordenadaY)},
+        map,
+        nombreUsuario: data.nombreUsuario,
+        horaActualizacion: data.horaActualizacion,
+      })
+      this.setState(prev => ({emergencyArray:[...prev.emergencyArray,marker]}))
+      console.log(marker)
+    }
+    else{
+      let temp = this.state.emergencyArray
+      temp[index].horaActualizacion = data.horaActualizacion
+      this.setState({emergencyArray:temp},() =>this.state.emergencyArray[index].setPosition(new this.props.google.maps.LatLng(Number(data.coordenadaX),Number(data.coordenadaY))) )
+      
+    }
+    console.log(data)
+  }
+
+  botonDePanicoPresionado(data){
+    // String
+    
+    // Object
+    notifier.notify({
+      title: data.titulo,
+      message: data.mensaje,
+      wait:true
+    });
+    notifier.on('click', (notifierObject, options) => {
+      // Triggers if `wait: true` and user clicks notification
+      this.setState({viewSelected:3},() =>remote.getCurrentWindow().show()) 
+    });
+    console.log(data);
+      socket.on('alertaPublica_posicionActualizada', (dataPos) => this.updateMarkerPos(dataPos)
+    )
+  }
+
   /* -------------funciones para custom title bar ------------*/
   _renderTitleBar(){
     return(
@@ -68,22 +157,61 @@ class App extends Component {
   }
   /* ----------------------- */
   /* Animacion de auto en mapa */
-  drawCar(){
-    console.log(this.state.actualPos)
-    this.setState({actualPos:this.state.actualPos + 1});
-    if(this.state.lineCoordinates != null)
-      if(this.state.actualPos == this.state.lineCoordinates.length - 1)
-        this.setState({actualPos:0})
+  drawCar(index){
+    console.log(index)
+    console.log(this.state.markerArray[index].intervalID)
+    console.log(this.state.markerArray[index].position)
+    const array = this.state.markerArray;
+    const temp = array[index].lienarCoord.filter((__dirname,index) => index !== 0)
+    array[index].lienarCoord = temp
+    console.log(array[index].lienarCoord)
+    this.setState({markerArray:array},() => this.state.markerArray[index].setPosition(array[index].lienarCoord[0]));
+    if(this.state.markerArray[index].lienarCoord != null)
+      if(this.state.markerArray[index].lienarCoord.length == 0){
+        clearInterval(this.state.markerArray[index].intervalID)
+        array[index].lienarCoord = null
+        this.setState({markerArray:array})
+        let pos = new this.props.google.maps.LatLng(patrullas[index].lat,patrullas[index].lng)
+        this.state.markerArray[index].setPosition(pos)
+      }
   }
    /* Dibujado camino en mapa */
   handleMapLoad(mapProps,map) {
-    /* this.mapComponent = map;
+    this.mapComponent = map;
     if (map) {
       console.log(map.getZoom());
-    } */
+    }
     const {google} = mapProps;
-    
-    const directionsService = new google.maps.DirectionsService();
+    let marker
+    let infowindow
+    map.panTo(this.state.centerFocus);
+    patrullas.map((item,i) => (marker = new google.maps.Marker({
+      position: {lat:item.lat,lng:item.lng},
+      map,
+      title: 'Hello World!',
+      icon:{
+        url: markerIcon,
+        anchor: new this.props.google.maps.Point(15,15),
+        scaledSize: new this.props.google.maps.Size(32,32),
+      
+      },
+      lienarCoord:null,
+      intervalID:0,
+      lineColor:item.color,
+      libre:true,
+      infowindowRef:null
+      
+    }),marker.addListener('click', () => {
+       this.setCurrentPCar(i)
+    })
+    ,this.setState(prev => ({markerArray:[...prev.markerArray,marker]}))
+    ,marker.infowindowRef = new this.props.google.maps.InfoWindow({
+          content: '<p style="color:black">'+item.patrulla+'</p>',
+          disableAutoPan : true
+        }),
+        marker.infowindowRef.open(map,marker)
+    ))
+    /* const directionsService = new google.maps.DirectionsService();
     const directionsDisplay = new google.maps.DirectionsRenderer(); 
 
     directionsDisplay.setMap(map);
@@ -96,7 +224,7 @@ class App extends Component {
     
        directionsService.route({
         origin: 'Guadalajara', 
-        destination: 'Zapopan',   
+        destination: this.state.centerFocus,   
         travelMode: google.maps.TravelMode.DRIVING,   
        },  
          (result, status) => {   
@@ -110,14 +238,14 @@ class App extends Component {
            } else {
               console.warn(`error fetching directions ${status}`);
            }
-         });
-         //setInterval(this.drawCar.bind(this), 400);
+         }); */
+         //this.intervalID = setInterval(this.drawCar.bind(this), 400);
     //makeRequest();
   }
-  /* Scri´ts bootstrap */
+  /* Scripts bootstrap */
   scripts(){
     return(
-      <head>
+      <div>
       <script src="https://unpkg.com/react/umd/react.production.js" crossorigin />
 
         <script
@@ -137,9 +265,73 @@ class App extends Component {
           integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T"
           crossorigin="anonymous"
         />
-        </head>
+        </div>
     );
   }
+  drawRoute(index){
+    const google = this.props.google
+    const directionsService = new google.maps.DirectionsService();
+    var coord = null;
+    
+       directionsService.route({
+        origin: this.state.markerArray[index].position, 
+        destination: this.state.emergencyArray[this.state.currentReport].position,   
+        travelMode: google.maps.TravelMode.DRIVING,   
+       },  
+         (result, status) => {   
+           if (status === google.maps.DirectionsStatus.OK) {   
+             const overViewCoords = result.routes[0].overview_path;   
+                coord = overViewCoords
+                /* if(this.state.lineCoordinates.length == 0)
+                  this.setState({lineCoordinates: [overViewCoords]},() => {
+                    let temp = [...this.state.markerArray]
+                    temp[index].lienarCoordID = (this.state.lineCoordinates.length -1)
+                    this.setState({markerArr:temp}, () => {
+                      const intervalID = setInterval(() => this.drawCar(index), 2000)
+                      this.setState(prev => ({intervalIDs:[...prev.intervalIDs,intervalID]}))
+                    }) intervalID
+                  }) */
+                //else{
+                  let temp = [...this.state.markerArray]
+                  temp[index].lienarCoord = overViewCoords
+                  const intervalID = setInterval(() => this.drawCar(index), 2000)
+                  temp[index].intervalID = intervalID
+                  this.setState({markerArr:temp})
+                  
+                //}
+                // store intervalId in the state so it can be accessed later:
+                //this.setState({intervalId: intervalId});
+           } else {
+              console.warn(`error fetching directions ${status}`);
+           }
+         });
+         //this.intervalID = setInterval(this.drawCar.bind(this), 400);
+         
+  }
+  changeCenter(pos){
+    
+    this.setState({centerFocus:pos})
+    
+  }
+  setCurrentPCar(index){
+    console.log(index)
+    this.setState({currentPCar:index},() => this.drawRoute(index))
+  }
+  setCurrentreport(index){
+    this.setState({currentReport:index})
+  }
+  setCurrentDetailsreport(index){
+    this.setState({currentDetailReport:index})
+  }
+  changeInfoState(){
+    this.setState({showInfo:!this.state.showInfo},() => {
+      this.state.showInfo ?
+      this.state.markerArray.map((item) => item.infowindowRef.open(this.mapComponent, item)) :
+      this.state.markerArray.map((item) => item.infowindowRef.close()) 
+    })
+    console.log(this.state.showInfo)
+  }
+
 /* Render reportes y policias (inicio) */
   _renderRow(){
     
@@ -154,32 +346,33 @@ class App extends Component {
       flexDirection: "column",
     }
     return(
-      <Row noGutters={true} style={{height:'40%',minWidth:'500px'}}>
+      <Row noGutters={true} style={{height:'50%',minWidth:'500px'}}>
         <Col style={styleCol1}>
-          <div className="stats">
+          <div className="stats" style={{flexDirection: "row",display:"flex" }}>
             <h5 style={{padding:'10px'}}>Reportes</h5>
           </div>
             <SimpleBar className="list" >
                 <Nav fill defaultActiveKey="link-1" className="flex-column" variant="reportList">
-                  {[...Array(50)].map((x, i) =>
-                  <Nav.Link eventKey={"link-" + (i+1)} className="reportFont" >
-                    Reporte {i+1} <br/>
-                    <light>Asalto - 10/10/19 - Status</light>
+                  {this.state.emergencyArray.map((item, i) =>
+                  <Nav.Link eventKey={"link-" + (i+1)} className="reportFont" onSelect={()=> (console.log(item),this.setCurrentreport(i), this.changeCenter(item.position))}>
+                    Emergencia {i+1} - {item.nombreUsuario}<br/>
+                    <light>{item.horaActualizacion}</light>
                   </Nav.Link>
                   )}
                 </Nav>
             </SimpleBar>
         </Col >
         <Col style={styleCol2} >
-          <div className="stats">
-            <h5 style={{padding:'10px'}}>Policia disponible</h5>
+          <div className="stats" style={{flexDirection: "row",display:"flex" }}>
+            <h5 style={{padding:'10px'}}>Policia disponible</h5> 
+            <a className="hideInfo" onClick={() => this.changeInfoState() }>{this.state.showInfo ? <IoMdEyeOff/> : <IoMdEye/>}</a>
           </div>
             <SimpleBar className="list" >
                 <Nav fill defaultActiveKey="link-1" className="flex-column" variant="reportList">
-                  {[...Array(50)].map((x, i) =>
-                  <Nav.Link eventKey={"link-" + (i+1)} className="reportFont" >
+                  {patrullas.map((item, i) =>
+                  <Nav.Link eventKey={"link-" + (i+1)} className="reportFont" onSelect={() => this.setCurrentPCar(i)} >
                     Patrulla <br/>
-                    <light>PR4{i+1}</light>
+                    <light>{item.patrulla}</light>
                   </Nav.Link>
                   )}
                 </Nav>
@@ -191,16 +384,19 @@ class App extends Component {
 /* Render de mapa */
   _renderMap(){
     const style = {
-      height: '60%',
+      height: '50%',
       position:'relative',
       minWidth:'500px'
     }
+    const center = {
+      lat: 20.663609,
+      lng: -103.348982
+    }
+    /* console.log(center)
+    console.log(this.state.centerFocus) */
     return(
-      <div className="App-header">
-        <Map google={this.props.google} zoom={13} initialCenter={{
-            lat: 20.663609,
-            lng: -103.348982
-          }}
+      <div className="App-header" style={{display: this.state.viewSelected === 3 ? 'block':'none'}}> 
+        <Map google={this.props.google} zoom={13} center={this.state.centerFocus} ref={(instance) => {this.mapa = instance}}
           fullscreenControl={false}
           rotateControl={false}
           streetViewControl={false}
@@ -208,23 +404,41 @@ class App extends Component {
           style={style}
           onReady={this.handleMapLoad.bind(this)}>
   
-            <Polyline
-              path={this.state.lineCoordinates}
-              geodesic={false}
-              options={{
-                  strokeColor: '#38B44F',
-                  strokeOpacity: 1,
-                  strokeWeight: 7,
-              }}
-            />
-            <Marker
-              name={'Policia'}
-              position={this.state.lineCoordinates !== null ? this.state.lineCoordinates[this.state.actualPos]:'0,0'} 
-              icon={{
-                url: markerIcon,
-                anchor: new this.props.google.maps.Point(15,15),
-                scaledSize: new this.props.google.maps.Size(32,32)
-              }}/>
+            {this.state.markerArray.map((item,i) => 
+              <Polyline
+                path={item.lienarCoord}
+                geodesic={false}
+                strokeColor={item.lineColor}
+                options={{
+                    strokeOpacity: 1,
+                    strokeWeight: 7,
+                }}
+              />
+            )}
+            { //curly brace here lets you write javscript in JSX
+              /* this.state.reports.map(item =>
+                  <Marker
+                    key={item.id}
+                    title={item.descripcion}
+                    name={item.descripcion}
+                    position={{ lat: Number(item.latitud), lng: Number(item.longitud) }}
+                  />
+              ) */
+            }
+            {
+            /* patrullas.map(item =>
+              <Marker
+                //ref={(instance) => this.patrulla= instance}
+                name={item.patrulla}
+                position={{lat: item.lat, lng: item.lng}} 
+                onClick={this.setCurretnPCar}
+                icon={{
+                  url: markerIcon,
+                  anchor: new this.props.google.maps.Point(15,15),
+                  scaledSize: new this.props.google.maps.Size(32,32)
+                }}/>
+               ) */
+            }
             {this._renderRow()}
         </Map>
       </div>
@@ -246,7 +460,7 @@ class App extends Component {
           <Nav fill defaultActiveKey="link-1" className="flex-column" variant="pills">
             <Nav.Link eventKey="link-1"onSelect={() => this.changeView(1)}>Inicio</Nav.Link>
             <Nav.Link eventKey="link-2" onSelect={() => this.changeView(2)} >Denuncias</Nav.Link>
-            <Nav.Link eventKey="link-3" onSelect={() => this.changeView(3)} >Emergencias</Nav.Link>
+            <Nav.Link eventKey="link-3" onSelect={() => this.changeView(3)} >Emergencias {this.state.emergencyArray.length > 0 &&<IoMdAlert style={{marginLeft:40,color:"red",fontSize:22}}/>}</Nav.Link>
             <hr className="titleLine"/>
             <Nav.Link eventKey="link-4">Informacion</Nav.Link>
             <Nav.Link eventKey="link-5" onSelect={() => this.minimizeWindow()} >Ayuda</Nav.Link>
@@ -269,7 +483,7 @@ class App extends Component {
       flexDirection: "column",
     }
     return (
-        <div className="App-header">
+        <div className="App-header" style={{display: this.state.viewSelected === 2 ? 'block':'none'}}>
           <Row noGutters={true}  style={{height:'100%',minWidth:'600px'}}>
             <Col style={styleCol1} lg={4}>
               <div className="stats">
@@ -277,10 +491,10 @@ class App extends Component {
               </div>
               <SimpleBar className="list" >
                 <Nav fill defaultActiveKey="link-1" className="flex-column" variant="reportList">
-                  {[...Array(70)].map((x, i) =>
-                  <Nav.Link eventKey={"link-" + (i+1)} className="reportFont" >
-                    Reporte {i+1} <br/>
-                    <light>Asalto - 10/10/19 - Status</light>
+                  {this.state.reports.map((item, i) =>
+                  <Nav.Link eventKey={"link-" + (i+1)} className="reportFont" onSelect={() => this.setCurrentDetailsreport(i)}>
+                    Reporte {i+1} - {item.autorReporte} <br/>
+                    <light>{tipDelito[Number(item.tipoReporte)-1]} - {item.fechaIncidente} - Status</light>
                   </Nav.Link>
                   )}
                 </Nav>
@@ -317,22 +531,17 @@ class App extends Component {
     
     <Row noGutters={true} >
       <Col>
-        <p className="reportFont" >Fecha y hora de reporte <br/> <light>10/10/10</light> </p>
-        <p className="reportFont" >Ubicación del incidente <br/> <light>Long, Lat</light></p>
-        <p className="reportFont" >Tipo de delito <br/> <light>Asalto</light></p>
-        <p className="reportFont" >ID reporte <br/> <light>1234567890ABCDEF</light></p>
+        <p className="reportFont" >Fecha y hora de reporte <br/> <light>{this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport].fechaReporte:'0/0/0'}</light> </p>
+        <p className="reportFont" >Ubicación del incidente <br/> <light>{this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport].latitud:'0'}, {this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport].longitud:'0'}</light></p>
+        <p className="reportFont" >Tipo de delito <br/> <light>{tipDelito[this.state.reports.length > 0 ?(Number(this.state.reports[this.state.currentDetailReport].tipoReporte)-1):0]}</light></p>
+        <p className="reportFont" >ID reporte <br/> <light>{this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport]._id:'0'}</light></p>
       </Col>
       <Col>
-        <p className="reportFont" >Fecha y hora del incidente <br/> <light>10/10/10</light> </p>
+        <p className="reportFont" >Fecha y hora del incidente <br/> <light>{this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport].fechaIncidente:'0/0/0'}</light> </p>
         <p>Descripción</p>
         <SimpleBar className="reportDesc">
           <light>
-          Lorem ipsum dolor sit amet, consectetur adipiscing elit, 
-          sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
-          Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris 
-          nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in 
-          reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. 
-          Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+          {this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport].descripcion:''}
           </light>
         </SimpleBar>
       </Col>
@@ -342,23 +551,21 @@ class App extends Component {
     );
   }
   /* Render de seguimientoa denuncias */
-  _renderSegdenun(){
-
+  _renderView(){
+    
+    let detailsView = this._renderDenuncias()
+    switch(this.state.viewSelected ){
+      case 1: 
+        return <Mapview/>
+      case 2:
+        return detailsView
+      case 3:
+        return null
+    }
   }
   /* render principal de la aplicacion */
   render(){
     let item;
-    switch(this.state.viewSelected ){
-      case 1:
-        item = this._renderMap();
-        break;
-      case 2:
-        item = this._renderDenuncias();
-        break;
-      case 3:
-        item = null
-        break;
-    }
     return(
       <Container style={{ padding: 0, margin: 0, backgroundColor:'#303136', height:'100vh'}} fluid={true}>
         {this.scripts()}
@@ -366,7 +573,9 @@ class App extends Component {
         <Row noGutters={true} className="bottomRow">
             {this._renderSideBar()}
           <Col>
-            {item}
+            {this._renderMap()}
+            {this._renderDenuncias()}
+            
           </Col>
         </Row>
       </Container>

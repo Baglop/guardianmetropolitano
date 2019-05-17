@@ -9,8 +9,10 @@ let mainWindow
 function createWindow () {
   // Create the browser window.
   mainWindow = new BrowserWindow({
-    width: 800,
+    width: 1120,
     height: 600,
+    minHeight: 600,
+    minWidth: 1120,
     // webPreferences: {
     //   nodeIntegration: true
     // }
@@ -36,7 +38,11 @@ function createWindow () {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.on('ready', createWindow)
+app.on('ready', function(){
+  console.log('yes')
+  createWindow()
+  app.setAppUserModelId('com.siliconbear.ojometropolitano');
+})
 
 // Quit when all windows are closed.
 app.on('window-all-closed', function () {
