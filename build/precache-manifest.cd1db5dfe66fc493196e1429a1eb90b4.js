@@ -1,5 +1,9 @@
 self.__precacheManifest = [
   {
+    "revision": "bd75cf594e7e392ed0106b20a0e0b842",
+    "url": "./static/media/logoSilicon.bd75cf59.png"
+  },
+  {
     "revision": "5d5d9eefa31e5e13a6610d9fa7a283bb",
     "url": "./static/media/logo.5d5d9eef.svg"
   },
@@ -12,23 +16,23 @@ self.__precacheManifest = [
     "url": "./static/js/runtime~main.d653cc00.js"
   },
   {
-    "revision": "bd620994cd9eb1e9b8d3",
-    "url": "./static/js/main.60b5de41.chunk.js"
+    "revision": "1e57f59df3f1f26c696b",
+    "url": "./static/js/main.fa3ec4c9.chunk.js"
   },
   {
-    "revision": "448459107ecc18f88ca7",
-    "url": "./static/js/2.3121b753.chunk.js"
+    "revision": "0329775bc49ee7d7511e",
+    "url": "./static/js/2.93899d44.chunk.js"
   },
   {
-    "revision": "bd620994cd9eb1e9b8d3",
-    "url": "./static/css/main.1d1c5aad.chunk.css"
+    "revision": "1e57f59df3f1f26c696b",
+    "url": "./static/css/main.c61ba16d.chunk.css"
   },
   {
-    "revision": "448459107ecc18f88ca7",
+    "revision": "0329775bc49ee7d7511e",
     "url": "./static/css/2.c483b2ec.chunk.css"
   },
   {
-    "revision": "4619a7bed727aeaef20a90ab1b08efbf",
+    "revision": "58c1b32164c7280ea961aba097e9f1cb",
     "url": "./index.html"
   }
 ];

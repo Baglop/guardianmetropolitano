@@ -25,7 +25,7 @@ function createWindow () {
   const startUrl = process.env.ELECTRON_START_URL || 'build/index.html'
   process.env.ELECTRON_START_URL ? mainWindow.loadURL(startUrl):mainWindow.loadFile(startUrl) ;
   // Open the DevTools.
-   mainWindow.webContents.openDevTools()
+   //mainWindow.webContents.openDevTools()
   // Emitted when the window is closed.
   mainWindow.on('closed', function () {
     // Dereference the window object, usually you would store windows

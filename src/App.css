@@ -102,9 +102,21 @@ hr.titleLine{
 
 .reportFont{
   color: white !important;
+  display: flex !important;
+  justify-content: flex-start;
+   align-items: center;
 }
 
 .reportFont light{
+  color:#b1b1b1 ;
+  font-size: 12px;
+}
+
+.reportDetails{
+  color: white !important;
+}
+
+.reportDetails light{
   color:#b1b1b1 ;
   font-size: 12px;
 }
@@ -176,6 +188,19 @@ hr.titleLine{
 .hideInfo:hover {
   background-color: #545454;
   border-radius: 100%;
+}
+
+.deleteEmergencyButton{
+  text-align: center;
+  cursor: pointer;
+  color: #b1b1b1 !important;
+  background-color:transparent;
+  border: none;
+  font-size: 18px;
+}
+
+.deleteEmergencyButton:hover {
+ color: white !important;
 }
 
 

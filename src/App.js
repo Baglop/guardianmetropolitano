@@ -4,7 +4,7 @@ import logo from './logo.svg';
 import { IoMdEye, IoMdEyeOff, IoMdAlert } from "react-icons/io";
 import logoImage from  './img/Ojo_Metropolitano_Logo.PNG';
 import markerIcon from './img/baseline_directions_car_black_18dp.png';
-import { Container, Row, Col, Button, Nav } from 'react-bootstrap';
+import { Container, Row, Col, Button, Nav  } from 'react-bootstrap';
 import {Map, InfoWindow, Polyline, GoogleApiWrapper, Marker} from 'google-maps-react';
 import SimpleBar from 'simplebar-react';
 import io from 'socket.io-client/dist/socket.io.js';
@@ -12,7 +12,7 @@ import 'simplebar/dist/simplebar.min.css';
 import './App.css';
 import './TitlebarStyle.css';
 import { relative } from 'path';
-import Mapview from './mapView.js'
+import InfoView from './infoView.js'
 
 const url = 'http://siliconbear.dynu.net:3030';
 const remote = window.require('electron').remote;
@@ -50,6 +50,7 @@ class App extends Component {
       showInfo:true,
       markerArray:[],
       emergencyArray:[],
+      reportFilter:8,
       centerFocus:{
         lat: 20.663609,
         lng: -103.348982
@@ -65,10 +66,41 @@ class App extends Component {
     socket.emit('vigilarSalaAgentePoliciaco');
     
     socket.on('botonDePanicoPresionado',(data) => this.botonDePanicoPresionado(data));
-    socket.on('reporteNuevo', (reporte) => {
+    socket.on('reporteNuevo', async (reporte) => {
       console.log("**************************************** reporteNuevo ****************************************");
       console.log(reporte);
-      this.setState(prev => ({reports:[...prev.reports,reporte]}))
+      let direccion = await this.getAddress(reporte.latitud,reporte.longitud)
+      console.log(direccion)
+      Object.defineProperty(reporte,'direccion',{
+        enumerable: true,
+        configurable: true,
+        writable: true,
+        value: direccion
+      });
+      let infoWindow
+      this.setState(prev => ({reports:[...prev.reports,reporte]}),() => {let marker = new this.props.google.maps.Marker({
+            position: {lat:Number(reporte.latitud),lng:Number(reporte.longitud)},
+            map:this.homeMap,
+            nombreUsuario: reporte.autorReporte,
+            fechaIncidente: reporte.fechaIncidente,
+            fechaReporte: reporte.fechaReporte
+          })
+          infoWindow = new this.props.google.maps.InfoWindow({
+            content: '<p style="color:black">'+tipDelito[reporte.tipoReporte-1]+'</p>',
+            disableAutoPan : true
+          })
+          marker.addListener('click', () => {
+            this.homeMap.panTo(marker.position)
+            infoWindow.open(this.homeMap,marker)
+          })
+          Object.defineProperty(reporte,'marker',{
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: marker
+          });
+        }
+      )
 
     });
     
@@ -85,7 +117,12 @@ class App extends Component {
         nombreUsuario: data.nombreUsuario,
         horaActualizacion: data.horaActualizacion,
       })
+      marker.addListener('click', () => {
+        this.setCurrentreport(this.state.emergencyArray.length-1)
+        this.changeCenter(marker.position)
+     })
       this.setState(prev => ({emergencyArray:[...prev.emergencyArray,marker]}))
+      this.mapComponent.panTo(marker.position)
       console.log(marker)
     }
     else{
@@ -108,7 +145,8 @@ class App extends Component {
     });
     notifier.on('click', (notifierObject, options) => {
       // Triggers if `wait: true` and user clicks notification
-      this.setState({viewSelected:3},() =>remote.getCurrentWindow().show()) 
+      this.changeView(3)
+      remote.getCurrentWindow().show()
     });
     console.log(data);
       socket.on('alertaPublica_posicionActualizada', (dataPos) => this.updateMarkerPos(dataPos)
@@ -175,42 +213,30 @@ class App extends Component {
         this.state.markerArray[index].setPosition(pos)
       }
   }
+  getAddress(lat,lng){
+    let geocoder = new this.props.google.maps.Geocoder;
+    let address;
+    var latlng = {lat: parseFloat(lat), lng: parseFloat(lng)};
+    return new Promise((resolve) => geocoder.geocode({'location': latlng},(results, status) => {
+      if (status === 'OK') {
+        if (results[0]) {
+          console.log(results[0].formatted_address)
+          address = results[0].formatted_address
+          resolve(address)
+        } else {
+          resolve(latlng)
+        }
+      } else {
+        window.alert('Geocoder failed due to: ' + status);
+      }
+    })
+    )
+  }
    /* Dibujado camino en mapa */
   handleMapLoad(mapProps,map) {
     this.mapComponent = map;
-    if (map) {
-      console.log(map.getZoom());
-    }
-    const {google} = mapProps;
-    let marker
-    let infowindow
-    map.panTo(this.state.centerFocus);
-    patrullas.map((item,i) => (marker = new google.maps.Marker({
-      position: {lat:item.lat,lng:item.lng},
-      map,
-      title: 'Hello World!',
-      icon:{
-        url: markerIcon,
-        anchor: new this.props.google.maps.Point(15,15),
-        scaledSize: new this.props.google.maps.Size(32,32),
-      
-      },
-      lienarCoord:null,
-      intervalID:0,
-      lineColor:item.color,
-      libre:true,
-      infowindowRef:null
-      
-    }),marker.addListener('click', () => {
-       this.setCurrentPCar(i)
-    })
-    ,this.setState(prev => ({markerArray:[...prev.markerArray,marker]}))
-    ,marker.infowindowRef = new this.props.google.maps.InfoWindow({
-          content: '<p style="color:black">'+item.patrulla+'</p>',
-          disableAutoPan : true
-        }),
-        marker.infowindowRef.open(map,marker)
-    ))
+    
+    map.panTo(this.state.centerFocus)
     /* const directionsService = new google.maps.DirectionsService();
     const directionsDisplay = new google.maps.DirectionsRenderer(); 
 
@@ -272,7 +298,7 @@ class App extends Component {
     const google = this.props.google
     const directionsService = new google.maps.DirectionsService();
     var coord = null;
-    
+    if(this.state.emergencyArray.length > 0)
        directionsService.route({
         origin: this.state.markerArray[index].position, 
         destination: this.state.emergencyArray[this.state.currentReport].position,   
@@ -311,6 +337,8 @@ class App extends Component {
   changeCenter(pos){
     
     this.setState({centerFocus:pos})
+    console.log(pos)
+    this.mapComponent.panTo(pos)
     
   }
   setCurrentPCar(index){
@@ -332,6 +360,12 @@ class App extends Component {
     console.log(this.state.showInfo)
   }
 
+  deleteEmercy(index){
+    this.state.emergencyArray[index].setMap(null)
+    const array = this.state.emergencyArray.filter((__dirname,i) => i !== index);
+    this.setState(prev => ({emergencyArray:array}))
+    console.log(array)
+  }
 /* Render reportes y policias (inicio) */
   _renderRow(){
     
@@ -354,9 +388,15 @@ class App extends Component {
             <SimpleBar className="list" >
                 <Nav fill defaultActiveKey="link-1" className="flex-column" variant="reportList">
                   {this.state.emergencyArray.map((item, i) =>
-                  <Nav.Link eventKey={"link-" + (i+1)} className="reportFont" onSelect={()=> (console.log(item),this.setCurrentreport(i), this.changeCenter(item.position))}>
-                    Emergencia {i+1} - {item.nombreUsuario}<br/>
-                    <light>{item.horaActualizacion}</light>
+                  <Nav.Link eventKey={"link-" + (i+1)} className="reportFont" onSelect={()=> (this.setCurrentreport(i), this.changeCenter(item.position))}>
+                    <div style={{width:'50%'}}>
+                      Emergencia {i+1} - {item.nombreUsuario}<br/>
+                      <light>{item.horaActualizacion}</light>
+                    </div>
+                    <div style={{display: 'flex',justifyContent: 'flex-end',alignItems: 'center',width:'50%'}} >
+                      <button className='deleteEmergencyButton' onClick={() => this.deleteEmercy(i)}>Eliminar</button>
+                    </div>
+
                   </Nav.Link>
                   )}
                 </Nav>
@@ -371,8 +411,10 @@ class App extends Component {
                 <Nav fill defaultActiveKey="link-1" className="flex-column" variant="reportList">
                   {patrullas.map((item, i) =>
                   <Nav.Link eventKey={"link-" + (i+1)} className="reportFont" onSelect={() => this.setCurrentPCar(i)} >
+                  <div>
                     Patrulla <br/>
                     <light>{item.patrulla}</light>
+                  </div>
                   </Nav.Link>
                   )}
                 </Nav>
@@ -444,10 +486,200 @@ class App extends Component {
       </div>
     );
   }
+  handleHomeMapLoad(mapProps,map){
+    this.homeMap = map
+    map.panTo(this.state.centerFocus)
+    const {google} = mapProps;
+    let marker
+    let infowindo
+    patrullas.map((item,i) => (marker = new google.maps.Marker({
+      position: {lat:item.lat,lng:item.lng},
+      map:map,
+      title: 'Hello World!',
+      icon:{
+        url: markerIcon,
+        anchor: new this.props.google.maps.Point(15,15),
+        scaledSize: new this.props.google.maps.Size(32,32),
+      
+      },
+      lienarCoord:null,
+      intervalID:0,
+      lineColor:item.color,
+      libre:true,
+      infowindowRef:null
+      
+    })
+    ,this.setState(prev => ({markerArray:[...prev.markerArray,marker]}))
+    ,marker.infowindowRef = new this.props.google.maps.InfoWindow({
+          content: '<p style="color:black">'+item.patrulla+'</p>',
+          disableAutoPan : true
+        }),
+        marker.infowindowRef.open(map,marker)
+    ))
+  }
+  filter(type){
+    this.state.reports.map((item) => {if(item.tipoReporte-1 == type || type == 8) item.marker.setMap(this.homeMap); else item.marker.setMap(null)})
+  }
+  handleRadioChange(event){
+    console.log(this.state.reportFilter)
+    if(this.state.reportFilter !== event.target.value)
+      this.setState({reportFilter:event.target.value},() => this.filter(this.state.reportFilter))
+    else{
+      this.setState({reportFilter:8},() => this.filter(this.state.reportFilter))
+    }
+  }
+  _renderFilter(){
+    return(
+    <div style={{position: 'absolute', top: 10, left: 10, zIndex: 99,backgroundColor:'rgba(48, 49, 54,0.7)',padding:10}}>
+      <label>
+      <input
+          type="radio"
+          value={8}
+          checked={this.state.reportFilter == 8}
+          onClick={(event) => this.handleRadioChange(event)}
+        />
+        Todos
+      </label>  <br/>
+      <label>
+        <input
+          type="radio"
+          value={0}
+          checked={this.state.reportFilter == 0}
+          onClick={(event) => this.handleRadioChange(event)}
+        />
+        Robo
+      </label><br/>
+      <label>
+        <input
+          type="radio"
+          value={1}
+          checked={this.state.reportFilter == 1}
+          onClick={(event) => this.handleRadioChange(event)}
+        />
+        Asalto
+      </label><br/>
+      <label>
+        <input
+          type="radio"
+          value={2}
+          checked={this.state.reportFilter == 2}
+          onClick={(event) => this.handleRadioChange(event)}
+        />
+        Acoso
+      </label><br/>
+      <label>
+        <input
+          type="radio"
+          value={3}
+          checked={this.state.reportFilter == 3}
+          onClick={(event) => this.handleRadioChange(event)}
+        />
+        Vandalismo
+      </label><br/>
+      <label>
+        <input
+          type="radio"
+          value={4}
+          checked={this.state.reportFilter == 4}
+          onClick={(event) => this.handleRadioChange(event)}
+        />
+        Pandillerismo
+      </label><br/>
+      <label>
+        <input
+          type="radio"
+          value={5}
+          checked={this.state.reportFilter == 5}
+          onClick={(event) => this.handleRadioChange(event)}
+        />
+        Violación
+      </label><br/>
+      <label>
+        <input
+          type="radio"
+          value={6}
+          checked={this.state.reportFilter == 6}
+          onClick={(event) => this.handleRadioChange(event)}
+        />
+        Secuestro o tentativa
+      </label><br/>
+      <label>
+        <input
+          type="radio"
+          value={7}
+          checked={this.state.reportFilter == 7}
+          onClick={(event) => this.handleRadioChange(event)}
+        />
+        Asesinato
+      </label>
+      <div>
+      Numero de patrulla <a className="hideInfo" onClick={() => this.changeInfoState() }>{this.state.showInfo ? <IoMdEyeOff/> : <IoMdEye/>}</a>
+      </div>
+
+    {/* ["Robo","Asalto","Acoso","Vandalismo","Pandillerismo","Violación","Secuestro o tentativa","Asesinato"] */}
+    </div>);
+  }
+  _renderHomeMap(){
+    const style = {
+      height: '100%',
+      position:'relative',
+      minWidth:'500px'
+    }
+    return(
+    <div className="App-header" style={{display: this.state.viewSelected === 1 ? 'block':'none'}}> 
+        <Map google={this.props.google} zoom={13} initialCenter={this.state.centerFocus} ref={(instance) => {this.mapa = instance}}
+          fullscreenControl={false}
+          rotateControl={false}
+          streetViewControl={false}
+          mapTypeControl={false} 
+          style={style}
+          onReady={this.handleHomeMapLoad.bind(this)}>
+          {this._renderFilter()}
+            {/* this.state.markerArray.map((item,i) => 
+              <Polyline
+                path={item.lienarCoord}
+                geodesic={false}
+                strokeColor={item.lineColor}
+                options={{
+                    strokeOpacity: 1,
+                    strokeWeight: 7,
+                }}
+              />
+            ) */}
+            { //curly brace here lets you write javscript in JSX
+              /* this.state.reports.map(item =>
+                  <Marker
+                    key={item.id}
+                    title={item.descripcion}
+                    name={item.descripcion}
+                    position={{ lat: Number(item.latitud), lng: Number(item.longitud) }}
+                  />
+              ) */
+            }
+            {
+            /* patrullas.map(item =>
+              <Marker
+                //ref={(instance) => this.patrulla= instance}
+                name={item.patrulla}
+                position={{lat: item.lat, lng: item.lng}} 
+                onClick={this.setCurretnPCar}
+                icon={{
+                  url: markerIcon,
+                  anchor: new this.props.google.maps.Point(15,15),
+                  scaledSize: new this.props.google.maps.Size(32,32)
+                }}/>
+               ) */
+            }
+        </Map>
+      </div>
+    );
+  }
   /* Cambia vista */
   changeView(num){
     this.setState({viewSelected:num})
     console.log(this.state.viewSelected)
+    num == 1 && this.state.markerArray.map((item) => {item.setMap(this.homeMap); this.props.google.maps.event.clearListeners(item,'click')})
+    num == 3 && this.state.markerArray.map((item,i) => {item.setMap(this.mapComponent); item.addListener('click', () => {this.setCurrentPCar(i)})}) 
   }
 /* Render menu sidebar */
   _renderSideBar(){
@@ -458,12 +690,12 @@ class App extends Component {
           </div>
           <hr className="titleLine"/>
           <Nav fill defaultActiveKey="link-1" className="flex-column" variant="pills">
-            <Nav.Link eventKey="link-1"onSelect={() => this.changeView(1)}>Inicio</Nav.Link>
-            <Nav.Link eventKey="link-2" onSelect={() => this.changeView(2)} >Denuncias</Nav.Link>
-            <Nav.Link eventKey="link-3" onSelect={() => this.changeView(3)} >Emergencias {this.state.emergencyArray.length > 0 &&<IoMdAlert style={{marginLeft:40,color:"red",fontSize:22}}/>}</Nav.Link>
+            <Nav.Link active={this.state.viewSelected === 1 ? true : false} eventKey="link-1"onSelect={() => this.changeView(1)}>Inicio</Nav.Link>
+            <Nav.Link active={this.state.viewSelected === 2 ? true : false} eventKey="link-2" onSelect={() => this.changeView(2)} >Denuncias</Nav.Link>
+            <Nav.Link active={this.state.viewSelected === 3 ? true : false} eventKey="link-3" onSelect={() => this.changeView(3)} >Emergencias {this.state.emergencyArray.length > 0 &&<IoMdAlert style={{marginLeft:40,color:"red",fontSize:22}}/>}</Nav.Link>
             <hr className="titleLine"/>
-            <Nav.Link eventKey="link-4">Informacion</Nav.Link>
-            <Nav.Link eventKey="link-5" onSelect={() => this.minimizeWindow()} >Ayuda</Nav.Link>
+           {/*  <Nav.Link active={this.state.viewSelected === 4 ? true : false}eventKey="link-4" onSelect={() => this.changeView(4)}> Informacion</Nav.Link>
+            <Nav.Link eventKey="link-5" onSelect={() => this.minimizeWindow()} >Ayuda</Nav.Link> */}
             <Nav.Link eventKey="link-6" onSelect={() => this.closeApp()}>Salir</Nav.Link>
           </Nav>
         </div>
@@ -492,7 +724,7 @@ class App extends Component {
               <SimpleBar className="list" >
                 <Nav fill defaultActiveKey="link-1" className="flex-column" variant="reportList">
                   {this.state.reports.map((item, i) =>
-                  <Nav.Link eventKey={"link-" + (i+1)} className="reportFont" onSelect={() => this.setCurrentDetailsreport(i)}>
+                  <Nav.Link eventKey={"link-" + (i+1)} className="reportDetails" onSelect={() => this.setCurrentDetailsreport(i)}>
                     Reporte {i+1} - {item.autorReporte} <br/>
                     <light>{tipDelito[Number(item.tipoReporte)-1]} - {item.fechaIncidente} - Status</light>
                   </Nav.Link>
@@ -512,10 +744,10 @@ class App extends Component {
               <Row noGutters={true} style={{height:'50%',minWidth:'600px'}}>
                 <Col style={styleCol1}>
                   <div className="stats" style={{backgroundColor:'#3b3f46'}}>
-                    <h5 style={{padding:'10px'}}>Seguimiento de denuncias</h5>
+                    <h5 style={{padding:'10px'}}>Evidencia</h5>
                   </div>
                   <SimpleBar className="listChild">
-
+                    <img src={this.state.reports.length > 0 && this.state.reports[this.state.currentDetailReport].evidencia}></img>
                   </SimpleBar>
                 </Col>
               </Row>
@@ -531,13 +763,13 @@ class App extends Component {
     
     <Row noGutters={true} >
       <Col>
-        <p className="reportFont" >Fecha y hora de reporte <br/> <light>{this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport].fechaReporte:'0/0/0'}</light> </p>
-        <p className="reportFont" >Ubicación del incidente <br/> <light>{this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport].latitud:'0'}, {this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport].longitud:'0'}</light></p>
-        <p className="reportFont" >Tipo de delito <br/> <light>{tipDelito[this.state.reports.length > 0 ?(Number(this.state.reports[this.state.currentDetailReport].tipoReporte)-1):0]}</light></p>
-        <p className="reportFont" >ID reporte <br/> <light>{this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport]._id:'0'}</light></p>
+        <p className="reportDetails" >Fecha y hora de reporte <br/> <light>{this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport].fechaReporte:'0/0/0'}</light> </p>
+        <p className="reportDetails" >Ubicación del incidente <br/> <light>{this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport].direccion:'0'}</light></p>
+        <p className="reportDetails" >Tipo de delito <br/> <light>{tipDelito[this.state.reports.length > 0 ?(Number(this.state.reports[this.state.currentDetailReport].tipoReporte)-1):0]}</light></p>
+        <p className="reportDetails" >ID reporte <br/> <light>{this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport]._id:'0'}</light></p>
       </Col>
       <Col>
-        <p className="reportFont" >Fecha y hora del incidente <br/> <light>{this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport].fechaIncidente:'0/0/0'}</light> </p>
+        <p className="reportDetails" >Fecha y hora del incidente <br/> <light>{this.state.reports.length > 0 ?this.state.reports[this.state.currentDetailReport].fechaIncidente:'0/0/0'}</light> </p>
         <p>Descripción</p>
         <SimpleBar className="reportDesc">
           <light>
@@ -550,19 +782,7 @@ class App extends Component {
     </div>
     );
   }
-  /* Render de seguimientoa denuncias */
-  _renderView(){
-    
-    let detailsView = this._renderDenuncias()
-    switch(this.state.viewSelected ){
-      case 1: 
-        return <Mapview/>
-      case 2:
-        return detailsView
-      case 3:
-        return null
-    }
-  }
+
   /* render principal de la aplicacion */
   render(){
     let item;
@@ -573,9 +793,10 @@ class App extends Component {
         <Row noGutters={true} className="bottomRow">
             {this._renderSideBar()}
           <Col>
+            {this._renderHomeMap()}
             {this._renderMap()}
             {this._renderDenuncias()}
-            
+            <InfoView viewSelected={this.state.viewSelected}/>
           </Col>
         </Row>
       </Container>
